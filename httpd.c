@@ -432,19 +432,29 @@ int startup(u_short *port)
     int on = 1;
     struct sockaddr_in name;
 
+//    创建一个套接字
     httpd = socket(PF_INET, SOCK_STREAM, 0);
     if (httpd == -1)
         error_die("socket");
+//    给name每个字节填充0
     memset(&name, 0, sizeof(name));
+//    使用IPv4地址
     name.sin_family = AF_INET;
+//    端口使用之前传递的
     name.sin_port = htons(*port);
+//    使用0.0.0.0这个地址
     name.sin_addr.s_addr = htonl(INADDR_ANY);
-    if ((setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) < 0)  
-    {  
+//    配置socket的参数
+//    SOL_SOCKET 存储socket层
+//    SO_REUSEADDR 允许在bind ()过程中本地地址可重复使用
+    if ((setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) < 0)
+    {
         error_die("setsockopt failed");
     }
+//    (struct sockaddr *)&name 做了一次类型转换，因为bind需要的是sockaddr的指针，而name是sockaddr_in
     if (bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0)
         error_die("bind");
+//    如果是动态的端口，那么这里会创建socket连接之后返回一个绑定的端口
     if (*port == 0)  /* if dynamically allocating a port */
     {
         socklen_t namelen = sizeof(name);
@@ -452,6 +462,8 @@ int startup(u_short *port)
             error_die("getsockname");
         *port = ntohs(name.sin_port);
     }
+
+//    进行监听，第一个参数是之前的套接字，第二个参数是请求队列，可以理解为并发量
     if (listen(httpd, 5) < 0)
         error_die("listen");
     return(httpd);
@@ -489,17 +501,20 @@ void unimplemented(int client)
 int main(void)
 {
     int server_sock = -1;
+//    确定绑定的端口
     u_short port = 4000;
     int client_sock = -1;
     struct sockaddr_in client_name;
     socklen_t  client_name_len = sizeof(client_name);
     pthread_t newthread;
 
+//    通过startup返回一个我们已经绑定好套接字的socket
     server_sock = startup(&port);
     printf("httpd running on port %d\n", port);
 
     while (1)
     {
+//        接受客户端信息，返回的是一个新的客户端的socket
         client_sock = accept(server_sock,
                 (struct sockaddr *)&client_name,
                 &client_name_len);
