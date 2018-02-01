@@ -245,10 +245,12 @@ void execute_cgi(int client, const char *path,
         while ((numchars > 0) && strcmp("\n", buf))
         {
             buf[15] = '\0';
+//            获取请求头中消息主体的大小
             if (strcasecmp(buf, "Content-Length:") == 0)
                 content_length = atoi(&(buf[16]));
             numchars = get_line(client, buf, sizeof(buf));
         }
+//        请求参数不正确的情况下返回一个400
         if (content_length == -1) {
             bad_request(client);
             return;
@@ -258,7 +260,7 @@ void execute_cgi(int client, const char *path,
     {
     }
 
-
+//建立管道，一般0用于读，1用于写
     if (pipe(cgi_output) < 0) {
         cannot_execute(client);
         return;
@@ -267,20 +269,24 @@ void execute_cgi(int client, const char *path,
         cannot_execute(client);
         return;
     }
-
+// fork一个子进程
     if ( (pid = fork()) < 0 ) {
         cannot_execute(client);
         return;
     }
     sprintf(buf, "HTTP/1.0 200 OK\r\n");
     send(client, buf, strlen(buf), 0);
+//    执行的大致流程是:父进程将请求的数据输入到cgi_input的写管道中，子进程读取cgi_input读管道的内容，把一些请求的数据写到环境变量中，
+//    通过excel执行文件，把文件的内容通过cgi_output的写管道写入，父进程通过cgi_output读取内容之后输出到客户端。
     if (pid == 0)  /* child: CGI script */
     {
         char meth_env[255];
         char query_env[255];
         char length_env[255];
 
+//        标准输出到output的写管道
         dup2(cgi_output[1], STDOUT);
+//        标准输入到input的读管道
         dup2(cgi_input[0], STDIN);
         close(cgi_output[0]);
         close(cgi_input[1]);
@@ -294,16 +300,21 @@ void execute_cgi(int client, const char *path,
             sprintf(length_env, "CONTENT_LENGTH=%d", content_length);
             putenv(length_env);
         }
+//        执行文件，把文件内容输入到cgi_output
         execl(path, NULL);
         exit(0);
     } else {    /* parent */
+//        关闭cgi_output的写管道
         close(cgi_output[1]);
+//        关闭cgi_input的读管道
         close(cgi_input[0]);
         if (strcasecmp(method, "POST") == 0)
+//            如果是post，根据请求主体的长度，一个字节一个字节的写入到cgi_input的写管道中
             for (i = 0; i < content_length; i++) {
                 recv(client, &c, 1, 0);
                 write(cgi_input[1], &c, 1);
             }
+//        获取子进程写入的输入，再讲数据输出给客户端
         while (read(cgi_output[0], &c, 1) > 0)
             send(client, &c, 1, 0);
 
