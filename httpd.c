@@ -66,6 +66,7 @@ void accept_request(void *arg)
                        * program */
     char *query_string = NULL;
 
+//    获取第一行的数据
     numchars = get_line(client, buf, sizeof(buf));
     i = 0; j = 0;
     while (!ISspace(buf[i]) && (i < sizeof(method) - 1))
@@ -76,8 +77,10 @@ void accept_request(void *arg)
     j=i;
     method[i] = '\0';
 
+//    判断请求方式
     if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
     {
+//        如果两种方法都不是(如果相等，strcasecmp返回0)，就返回一个501的报错
         unimplemented(client);
         return;
     }
@@ -88,6 +91,7 @@ void accept_request(void *arg)
     i = 0;
     while (ISspace(buf[j]) && (j < numchars))
         j++;
+//    拼接url的信息
     while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < numchars))
     {
         url[i] = buf[j];
@@ -97,9 +101,11 @@ void accept_request(void *arg)
 
     if (strcasecmp(method, "GET") == 0)
     {
+//        query_string 是定义的一个字符串指针
         query_string = url;
         while ((*query_string != '?') && (*query_string != '\0'))
             query_string++;
+//        如果带参数的情况下，直接把当前对应的指针设置成\0结束符
         if (*query_string == '?')
         {
             cgi = 1;
@@ -108,12 +114,19 @@ void accept_request(void *arg)
         }
     }
 
+//    把path 设置成'htdocs/文件'的形式，htdocs相当于我们的站点
     sprintf(path, "htdocs%s", url);
+//    如果是根目录的话就用`index.html`
     if (path[strlen(path) - 1] == '/')
         strcat(path, "index.html");
+
+//    判断文件是否存在，如果是-1表明文件不存在
     if (stat(path, &st) == -1) {
+
+//        strcmp 是区分大小写的比较
         while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
             numchars = get_line(client, buf, sizeof(buf));
+//        返回404
         not_found(client);
     }
     else
@@ -125,8 +138,10 @@ void accept_request(void *arg)
                 (st.st_mode & S_IXOTH)    )
             cgi = 1;
         if (!cgi)
+//            如果是get请求，并且没有参数时执行
             serve_file(client, path);
         else
+            //         如果get有参数，或者是post请求等情况下执行
             execute_cgi(client, path, method, query_string);
     }
 
@@ -317,12 +332,15 @@ int get_line(int sock, char *buf, int size)
     char c = '\0';
     int n;
 
+//    获取一行的socket的数据
     while ((i < size - 1) && (c != '\n'))
     {
+//        一个字节一个字节的获取socket的数据，缓冲到c
         n = recv(sock, &c, 1, 0);
         /* DEBUG printf("%02X\n", c); */
         if (n > 0)
         {
+//            \r 表示回车 \n 表示换行
             if (c == '\r')
             {
                 n = recv(sock, &c, 1, MSG_PEEK);
@@ -407,12 +425,15 @@ void serve_file(int client, const char *filename)
     while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
         numchars = get_line(client, buf, sizeof(buf));
 
+//    打开文件返回文件指针
     resource = fopen(filename, "r");
     if (resource == NULL)
         not_found(client);
     else
     {
+//        设置响应头
         headers(client, filename);
+//        逐行获取文件的内容返回
         cat(client, resource);
     }
     fclose(resource);
@@ -521,6 +542,7 @@ int main(void)
         if (client_sock == -1)
             error_die("accept");
         /* accept_request(&client_sock); */
+        // 创建线程
         if (pthread_create(&newthread , NULL, (void *)accept_request, (void *)(intptr_t)client_sock) != 0)
             perror("pthread_create");
     }
